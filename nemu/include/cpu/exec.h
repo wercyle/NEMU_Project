@@ -1,0 +1,78 @@
+#ifndef __CPU_EXEC_H__
+#define __CPU_EXEC_H__
+
+#include <isa.h>
+#include <rtl/rtl.h>
+#include <memory/vaddr.h>
+#include <cpu/decode.h>
+
+
+
+
+
+
+#define def_EHelper(name) void concat(exec_, name) (DecodeExecState *s)
+
+
+
+
+// empty decode helper
+#define decode_empty(s)
+                                                                                         //ID:id;   EX:ex;    W:w 
+#define IDEXW(idx, id, ex, w) CASE_ENTRY(idx, concat(decode_, id), concat(exec_, ex), w) //case idx: set_width(s,w);decode_id(s);exec_ex(s);break;
+#define IDEX(idx, id, ex)     IDEXW(idx, id, ex, 0)                                      //case idx: set_width(s,0);decode_id(s);exec_ex(s);break;
+#define EXW(idx, ex, w)       IDEXW(idx, empty, ex, w)                                   //case idx: set_width(s,w);decode_empty(s);exec_ex(s);break;
+#define EX(idx, ex)           EXW(idx, ex, 0)                                            //case idx: set_width(s,0);decode_empty(s);exec_ex(s);break;
+#define EMPTY(idx)            EX(idx, inv)                                               //case idx: set_width(s,0);decode_empty(s);exec_inv(s);break;
+
+
+// set_width() is defined in src/isa/$isa/exec/exec.c
+#define CASE_ENTRY(idx, id, ex, w) case idx: set_width(s, w); id(s); ex(s); break;  
+
+
+void raise_intr(DecodeExecState *s,word_t NO,vaddr_t ret_addr);
+
+
+static inline uint32_t instr_fetch(vaddr_t *pc, int len) {
+  uint32_t instr = vaddr_ifetch(*pc, len);
+ // if(cpu.pc==0x100b46) printf("instr:%x len:%d\n",instr,len);
+#ifdef DEBUG
+  uint8_t *p_instr = (void *)&instr;
+  int i;
+  for (i = 0; i < len; i ++) {
+    extern char log_bytebuf[];
+    strcatf(log_bytebuf, "%02x ", p_instr[i]);
+  }
+#endif
+  (*pc) += len;
+  return instr;
+}
+
+static inline void update_pc(DecodeExecState *s) {
+  cpu.pc = (s->is_jmp ? s->jmp_pc : s->seq_pc);
+}
+
+#ifdef DEBUG
+#define print_asm(...) \
+  do { \
+    extern char log_asmbuf[]; \
+    strcatf(log_asmbuf, __VA_ARGS__); \
+  } while (0)
+#else
+#define print_asm(...)
+#endif
+
+#ifndef suffix_char
+#define suffix_char(width) ' '
+#endif
+
+#define print_asm_template1(instr) \
+  print_asm(str(instr) "%c %s", suffix_char(id_dest->width), id_dest->str)
+
+#define print_asm_template2(instr) \
+  print_asm(str(instr) "%c %s,%s", suffix_char(id_dest->width), id_src1->str, id_dest->str)
+
+#define print_asm_template3(instr) \
+  print_asm(str(instr) "%c %s,%s,%s", suffix_char(id_dest->width), id_src1->str, id_src2->str, id_dest->str)
+
+#endif
